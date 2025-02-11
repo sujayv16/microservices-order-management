@@ -1,1 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Management Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fc;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h3 {
+            color: #2c3e50;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+        }
+
+        .input-group input {
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        .input-group button {
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .input-group button:hover {
+            background-color: #2980b9;
+        }
+
+        .alert {
+            padding: 10px;
+            margin-top: 15px;
+            background-color: #e74c3c;
+            color: white;
+            border-radius: 5px;
+            text-align: center;
+            display: none;
+        }
+
+        .success {
+            background-color: #2ecc71;
+        }
+
+        .title {
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .order-list {
+            margin-top: 20px;
+        }
+
+        .order-item {
+            padding: 10px;
+            background-color: #f0f0f0;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="title">
+            <h1>Order Management Service</h1>
+            <p>Manage your users and place orders with ease!</p>
+        </div>
+
+        <!-- Alert Message -->
+        <div id="alert" class="alert"></div>
+
+        <!-- User Service Section -->
+        <div class="section">
+            <h3>Create User</h3>
+            <div class="input-group">
+                <input type="text" id="name" placeholder="Full Name">
+                <input type="email" id="email" placeholder="Email">
+                <input type="password" id="password" placeholder="Password">
+                <input type="text" id="address" placeholder="Address">
+                <button onclick="createUser()">Create User</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Login</h3>
+            <div class="input-group">
+                <input type="email" id="loginEmail" placeholder="Email">
+                <input type="password" id="loginPassword" placeholder="Password">
+                <button onclick="loginUser()">Login</button>
+            </div>
+        </div>
+
+        <!-- Order Service Section (Initially Hidden) -->
+        <div class="section hidden" id="createOrderSection">
+            <h3>Create Order</h3>
+            <div class="input-group">
+                <input type="text" id="orderItem" placeholder="Order Item">
+                <button onclick="createOrder()">Create Order</button>
+            </div>
+        </div>
+
+        <!-- Orders List Section -->
+        <div class="order-list hidden" id="ordersList">
+            <h3>Orders</h3>
+            <div id="orders"></div>
+        </div>
+    </div>
+
+    <script>
+        const userServiceUrl = "http://192.168.56.101:5001";
+        const orderServiceUrl = "http://192.168.56.102:5002";
+
+        // On page load, check if the user is already logged in
+        window.onload = function() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                // If token exists, automatically log in the user and fetch orders
+                showAlert('You are already logged in!', 'success');
+                document.getElementById('createOrderSection').classList.remove('hidden');
+                fetchOrders();
+            }
+        };
+
+        async function createUser() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const address = document.getElementById('address').value;
+
+            const response = await fetch(`${userServiceUrl}/users`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, email, password, address })
+            });
+            const result = await response.json();
+            showAlert(result.message || result.error, result.message ? 'success' : 'error');
+        }
+
+        async function loginUser() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            const response = await fetch(`${userServiceUrl}/users/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+            const result = await response.json();
+            if (result.token) {
+                localStorage.setItem('token', result.token);  // Store the token
+                showAlert('Logged in successfully!', 'success');
+                document.getElementById('createOrderSection').classList.remove('hidden');
+                fetchOrders();  // Fetch orders immediately after login
+            } else {
+                showAlert(result.error, 'error');
+            }
+        }
+
+        async function createOrder() {
+            const item = document.getElementById('orderItem').value;
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${orderServiceUrl}/orders`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ item, token })
+            });
+            const result = await response.json();
+            showAlert(result.message || result.error, result.message ? 'success' : 'error');
+            fetchOrders(); // Fetch orders again after creating a new one
+        }
+
+        async function fetchOrders() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showAlert('Please login first!', 'error');
+                return;
+            }
+
+            const response = await fetch(`${orderServiceUrl}/orders?token=${token}`);
+            const result = await response.json();
+            if (result.orders) {
+                displayOrders(result.orders);
+            } else {
+                showAlert('No orders found!', 'error');
+            }
+        }
+
+        function displayOrders(orders) {
+            const ordersContainer = document.getElementById('orders');
+            ordersContainer.innerHTML = '';
+            orders.forEach(order => {
+                const orderElement = document.createElement('div');
+                orderElement.classList.add('order-item');
+                orderElement.textContent = `Order ID: ${order.order_id}, Item: ${order.item}, Status: ${order.status}`;
+                ordersContainer.appendChild(orderElement);
+            });
+            document.getElementById('ordersList').classList.remove('hidden');
+        }
+
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+            alert.classList.remove('error', 'success');
+            alert.classList.add(type);
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+
+</body>
+
+</html>
 
